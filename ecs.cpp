@@ -7,29 +7,6 @@
 #include <random>
 
 using namespace std;
-/*
-struct typedesc
-{
-    int tid;
-    int length;
-}
-
-static int typeidcounter = 0;
-
-map<string, typedesc> typetable;
-map<string, vector<>>
-
-
-
-int getComponentid(string name)
-{
-    return typetable[name].tid;
-}
-
-*/
-
-std::random_device rd;
-std::uniform_int_distribution<uint16_t> dist(0);
 
 class SizeArray
 {
@@ -38,7 +15,18 @@ public:
     int arrSize;
     int elemCount;
     uint8_t* data;
-    SizeArray(const SizeArray&) = delete;
+    SizeArray(SizeArray& other) :
+        elemSize(other.elemSize), arrSize(other.arrSize),
+        elemCount(other.elemCount)
+    {
+        this->data = other.data;
+        other.data = NULL;
+    }
+    SizeArray(SizeArray&& other)
+    {
+        this->data = other.data;
+        other.data = NULL;
+    }
     SizeArray& operator=(SizeArray other)
     {
         assert(0);
@@ -178,34 +166,6 @@ struct ComponentArray
     uint32_t compid;
 };
 
-struct Position
-{
-    int x;
-    int y;
-};
-
-
-struct Velocity
-{
-    float x;
-    float y;
-};
-
-
-
-struct ComplexStruct
-{
-    string s1;
-    string s2;
-    vector<int> vi;
-    char c;
-    int  i;
-    float f;
-    double d;
-    Position p;
-    uint64_t hash;
-};
-
 
 struct Entity
 {
@@ -231,14 +191,14 @@ struct TypeDesc
     uint16_t size;
 };
 
-map<uint32_t, TypeDesc> compTable;
 
+map<uint32_t, TypeDesc> compTable;
 map<uint32_t, uint8_t> HashidToEntityTableRow;
+
 
 union EntityHandle
 {
     uint64_t id;
-    // #pragma pack(push, 1)
     struct
     {
         uint8_t randomValue;
@@ -246,9 +206,7 @@ union EntityHandle
         uint16_t column;
         uint32_t typehash;
     };
-    // #pragma pack(pop)
 };
-
 static_assert(sizeof(EntityHandle) == 8, "EntityHandle should equal to 8");
 
 
@@ -325,7 +283,6 @@ struct EntityList
 
     void* GetEntityComponet(int index, uint32_t compid)
     {
-        // void * dataPointer = NULL;
         for(int i = 1; i < columnsCount; i++)
         {
             if(compid == columns[i].compid)
@@ -444,6 +401,22 @@ void DeleteEntity(uint64_t eid)
 {
 
 }
+
+
+struct Position
+{
+    int x;
+    int y;
+};
+
+
+struct Velocity
+{
+    float x;
+    float y;
+};
+
+
 
 // struct Row
 // {
