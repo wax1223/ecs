@@ -8,6 +8,11 @@
 
 using namespace std;
 
+
+random_device rd;
+
+uniform_int_distribution<uint8_t> dist(0);
+
 class SizeArray
 {
 public:
@@ -195,6 +200,28 @@ struct TypeDesc
 map<uint32_t, TypeDesc> compTable;
 map<uint32_t, uint8_t> HashidToEntityTableRow;
 
+union EntityHandle1
+{
+    union 
+    {
+        uint64_t id;
+        struct 
+        {
+            uint32_t randomValue;
+            uint32_t typehash;
+        };
+    };
+    union
+    {
+        uint64_t pos;
+        struct
+        {
+            uint32_t row;
+            uint32_t column;
+        };
+    };
+};
+
 
 union EntityHandle
 {
@@ -223,6 +250,7 @@ struct EntityList
     uint32_t entityCount = 0;
     EntityList(uint32_t _typehash, vector<string>& cL)
     {
+        typehash = _typehash;
         columnsCount = (uint8_t)cL.size() + 1;
         columns = (ComponentArray*)malloc(columnsCount * sizeof(ComponentArray));
         columns[0].data = new SizeArray(sizeof(EntityHandle), 8);
@@ -392,6 +420,7 @@ void AddComponent(uint64_t eid, uint32_t compid)
 {
 
 }
+
 void RemoveComponent(uint64_t eid, uint32_t compid)
 {
 
@@ -417,40 +446,125 @@ struct Velocity
 };
 
 
+/*
+struct Row
+{
+    uint32_t typehash;
+    uint32_t compCount;
+    void** compsList;
+};
 
-// struct Row
-// {
-//     uint32_t Count;
-//     uint32_t* rows;
-// }
+//systemId to row
+vector<Row> systemRow;
+map<uint32_t, uint32_t> hashidTorowIndex;
 
 
-// class PosSystem
-// {
-// public:
-//     uint16_t systemId;
-//     Row row;
-//     void PrintData()
-//     {
-//         for(int i = 0; i < row.count; i++)
-//         {
-//             //Prepare for the dataArray you want to access;
-//             row.rows[i]
-//             Position* p = getRowPtr(Position);
 
-//             for(int j = 0; j < ; j++)
-//             {
-//                 cout << "p->x: " << p[i]->x << " p->y: " << p[i]->y << endl;
-//             }
-//         }
-//     }
-// };
+Row& GetRow(uint32_t systemID)
+{
+    return systemRow[systemID];
+}
 
+uint32_t GetRow(string id)
+{
+    uint32_t hashid = hash32(id);
+    Row r;
+    auto row_i = hashidTorowIndex.find(r.typehash);
+    if(row_i != hashidTorowIndex.end())
+    {
+        //find such row
+        return systemRow[row_i];
+    }
+    else
+    {
+
+    }
+}
+
+uint32_t Match()
+{
+    //search row
+
+    //if not such row, create one and match
+    
+    Row r;
+    auto row_i = hashidTorowIndex.find(r.typehash);
+    if(row_i != hashidTorowIndex.end())
+    {
+        //find such row
+        return row_i;
+    }
+    else
+    {
+        //not found, create one
+
+        r.compCount = compSeq.size();
+        r.compsList = (void**) malloc(sizeof(void**) * r.compCount);
+
+        //only contains!
+        uint8_t row_index = HashidToEntityTableRow(r.typehash);
+        auto ret = HashidToEntityTableRow.find(r.typehash);
+        if(ret != HashidToEntityTableRow.end())
+        {
+            for(int i = 0; i < compSeq.size(); ++i)
+            {
+                for(int j = 0; j < EntityTable[row_index].columnsCount; ++j)
+                {
+                    if(compSeq == EntityTable[row_index].columns[j].compid);
+                    {
+                        r.compsList[i] = EntityTable[row_index].columns[j];
+                        break;
+                    }
+                }
+            }
+        }
+        //else not such type in
+
+        //Todo(Wax) implement contains.
+
+        systemRow.push_back(r);
+        return systemRow.size() - 1;
+    }
+    return 0;
+}
+
+class System
+{
+public:
+    uint32_t systemId;
+    //component sequence
+    vector<uint32_t> compSeq;
+};
+
+class PosSystem
+{
+public:
+    void PrintData()
+    {
+        //OnlyOnce and use forever!
+        Row& row = GetRow("Position, velocity");
+        for(int i = 0; i < row.count; i++)
+        {
+            //Prepare for the dataArray you want to access;
+            Position* p = row[i].column[0];
+            for(int j = 0; j < row[i].columnCount; j++)
+            {
+                cout << "p->x: " << p[i]->x << " p->y: " << p[i]->y << endl;
+            }
+        }
+    }
+};
+
+*/
 
 int main(int argc, char const *argv[])
 {
     RegisterComponent("Position", sizeof(Position));
     RegisterComponent("Velocity", sizeof(Velocity));
+    // RegisterSystem("Position, Velocity");
+
+
+
 
     uint64_t mye = RegisterEntity("Position");
     uint64_t mye2 = RegisterEntity("Position");
@@ -495,7 +609,18 @@ int main(int argc, char const *argv[])
     cout << "p5p->x: " << p5p->x << " p5p->y: " << p5p->y << endl;
     cout << "p5v->x: " << p5v->x << " p5v->y: " << p5v->y << endl;
 
+
     return 0;
 }
 
+//system 
+// match, rematch when entitytable row change.
+// 
 
+// class World
+// {
+// public:
+//     SystemMgr;
+//     ComponentMgr;
+//     EntityMgr;
+// }
