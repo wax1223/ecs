@@ -275,7 +275,8 @@ struct EntityList
         e.parent = h;
         e.sibling = h;
         entitys.push_back(e);
-        handle->column = entityCount = entitys.size() - 1;
+        entityCount = entitys.size();
+        handle->column = entityCount - 1;
 
         for(int i = 0; i < columnsCount; i++)
         {
@@ -395,95 +396,108 @@ struct Velocity
 };
 
 
-/*
 struct Row
 {
-    uint32_t typehash;
-    uint32_t compCount;
-    void** compsList;
+    int count;
+    struct inner
+    {
+        uint32_t typehash[16];
+        int entityCount;
+        int columnCount;
+        void* comps[16];
+        vector<Entity> * entitys;
+    };
+    inner* eachrow;
+    inner& operator[](int i)
+    {
+        return eachrow[i];
+    }
+    ~Row()
+    {
+        if(eachrow) free(eachrow);
+        eachrow = NULL;
+    }
+    Row() {}
+    void operator= (const Row& other)
+    {
+        assert(0);
+    }
+
+    // Row(const Row&& other) : count(other.count)
+    // {
+    //     // assert(0);
+    //     eachrow = other.eachrow;
+    //     // Row* r = const_cast<Row*>(other);
+    //     // other.eachrow = NULL;
+    // }
+    Row(const Row&& other) = delete;
+
+    Row(const Row& other) = delete;
+    // {
+    //     eachrow = other.eachrow;
+    //     Row* r = const_cast<Row*>(&other);
+    //     r->eachrow = NULL;
+    // }
 };
 
 //systemId to row
-vector<Row> systemRow;
-map<uint32_t, uint32_t> hashidTorowIndex;
+map<uint32_t, Row> hashidTorowIndex;
 
-
-
-Row& GetRow(uint32_t systemID)
+void GetRow(Row& r, string id)
 {
-    return systemRow[systemID];
-}
+    vector<string> cL;
+    SeperateBy(id, ',', cL);
+    sort(cL.begin(), cL.end(), [](string& a, string& b)
+    {
+        return a[0] < b[0];
+    });
+    string sstr = joinString(cL);
+    uint32_t hashid = hash32(sstr);
 
-uint32_t GetRow(string id)
-{
-    uint32_t hashid = hash32(id);
-    Row r;
-    auto row_i = hashidTorowIndex.find(r.typehash);
-    if(row_i != hashidTorowIndex.end())
+    uint32_t row[32];
+    uint32_t rowc = 0;
+
+    auto ret = hashidTorowIndex.find(hashid);
+    if(ret != hashidTorowIndex.end())
     {
         //find such row
-        return systemRow[row_i];
+        r =  ret->second;
     }
     else
     {
-
-    }
-}
-
-uint32_t Match()
-{
-    //search row
-
-    //if not such row, create one and match
-    
-    Row r;
-    auto row_i = hashidTorowIndex.find(r.typehash);
-    if(row_i != hashidTorowIndex.end())
-    {
-        //find such row
-        return row_i;
-    }
-    else
-    {
-        //not found, create one
-
-        r.compCount = compSeq.size();
-        r.compsList = (void**) malloc(sizeof(void**) * r.compCount);
-
-        //only contains!
-        uint8_t row_index = HashidToEntityTableRow(r.typehash);
-        auto ret = HashidToEntityTableRow.find(r.typehash);
-        if(ret != HashidToEntityTableRow.end())
+        //matching equal.
+        auto cret = compsTable.find(hashid);
+        if(cret != compsTable.end())
         {
-            for(int i = 0; i < compSeq.size(); ++i)
+            row[rowc++] = cret->second.entityTableRow;
+            r.count = rowc;
+        }
+        else
+        {
+            if(false)
             {
-                for(int j = 0; j < EntityTable[row_index].columnsCount; ++j)
-                {
-                    if(compSeq == EntityTable[row_index].columns[j].compid);
-                    {
-                        r.compsList[i] = EntityTable[row_index].columns[j];
-                        break;
-                    }
-                }
+                //TODO(wax):  contains? negate?
+            }
+            else
+            {
+                            //Not match any entityrow.
+                r.count = 0;
             }
         }
-        //else not such type in
-
-        //Todo(Wax) implement contains.
-
-        systemRow.push_back(r);
-        return systemRow.size() - 1;
     }
-    return 0;
+    r.eachrow = (Row::inner*)malloc(sizeof(Row::inner*) * r.count);
+    for(int i = 0; i < r.count; i++)
+    {
+        r.eachrow[i].entitys = &EntityTable[row[i]].entitys;
+        r.eachrow[i].entityCount = EntityTable[row[i]].entityCount;
+        r.eachrow[i].columnCount = EntityTable[row[i]].columnsCount;
+        for(int j = 0; j <  r.eachrow[i].columnCount; j++)
+        {
+            r.eachrow[i].comps[j] = EntityTable[row[i]].datas[j]->data;
+            r.eachrow[i].typehash[j] = EntityTable[row[i]].compids[j];
+        }
+    }
 }
-
-class System
-{
-public:
-    uint32_t systemId;
-    //component sequence
-    vector<uint32_t> compSeq;
-};
 
 class PosSystem
 {
@@ -491,20 +505,73 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& row = GetRow("Position, velocity");
-        for(int i = 0; i < row.count; i++)
+        Row rows;
+        GetRow(rows, "Position");
+    
+        cout << "\n\n";
+        for(int i = 0; i < rows.count; i++)
         {
-            //Prepare for the dataArray you want to access;
-            Position* p = row[i].column[0];
-            for(int j = 0; j < row[i].columnCount; j++)
+            cout << "\n";
+            vector<Entity>& e = *rows[i].entitys;
+            Position* p = (Position*)rows[i].comps[0];
+            for(int j = 0; j < rows[i].entityCount; j++)
             {
-                cout << "p->x: " << p[i]->x << " p->y: " << p[i]->y << endl;
+                cout << "Entity id: " << e[j].id << " with value: " << endl;
+                cout << "p->x: " << p[j].x << " p->y: " << p[j].y << endl;
             }
         }
     }
 };
 
-*/
+class VelSystem
+{
+public:
+    void PrintData()
+    {
+        //OnlyOnce and use forever!
+        Row rows;
+        GetRow(rows, "Velocity");
+    
+        cout << "\n\n";
+        for(int i = 0; i < rows.count; i++)
+        {
+            cout << "\n";
+            vector<Entity>& e = *rows[i].entitys;
+            Velocity* p = (Velocity*)rows[i].comps[0];
+            for(int j = 0; j < rows[i].entityCount; j++)
+            {
+                cout << "Entity id: " << e[j].id << " with value: " << endl;
+                cout << "v->x: " << p[j].x << " v->y: " << p[j].y << endl;
+            }
+        }
+    }
+};
+
+class VelPosSystem
+{
+public:
+    void PrintData()
+    {
+        //OnlyOnce and use forever!
+        Row rows;
+        GetRow(rows, "Velocity ,  Position");
+    
+        cout << "\n\n";
+        for(int i = 0; i < rows.count; i++)
+        {
+            cout << "\n";
+            vector<Entity>& e = *rows[i].entitys;
+            Position* p = (Position*)rows[i].comps[0];
+            Velocity* v = (Velocity*)rows[i].comps[1];
+            for(int j = 0; j < rows[i].entityCount; j++)
+            {
+                cout << "Entity id: " << e[j].id << " with value: " << endl;
+                cout << "p->x: " << p[j].x << " p->y: " << p[j].y << endl;
+                cout << "v->x: " << v[j].x << " v->y: " << v[j].y << endl;
+            }
+        }
+    }
+};
 
 
 EntityHandle NewEntity(uint32_t row)
@@ -608,12 +675,19 @@ int main(int argc, char const *argv[])
     cout << "p4->x: " << p4->x << " p4->y: " << p4->y << endl;
     cout << "p5p->x: " << p5p->x << " p5p->y: " << p5p->y << endl;
     cout << "p5v->x: " << p5v->x << " p5v->y: " << p5v->y << endl;
-    cout << "p5v->x: " << p5v->x << " p5v->y: " << p5v->y << endl;  
 
     cout << "p6pv->p.x: " << p6pv->p.x
      << " p6pv->p.y: " << p6pv->p.y
      << " p6pv->v.x: " << p6pv->v.x
      << " p6pv->v.y: " << p6pv->v.y;
     
+
+    PosSystem pos;
+    pos.PrintData();
+    VelSystem vol;
+    vol.PrintData();
+    VelPosSystem vp;
+    vp.PrintData();
+
     return 0;
 }
