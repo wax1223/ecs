@@ -5,13 +5,14 @@
 #include <cstdint>
 #include <functional>
 #include <random>
+#include <algorithm>
 
 using namespace std;
 
 
 random_device rd;
 
-uniform_int_distribution<uint8_t> dist(0);
+uniform_int_distribution<uint32_t> dist(0);
 
 class SizeArray
 {
@@ -101,7 +102,6 @@ public:
         }
         elemCount--;
     }
-
 };
 
 
@@ -165,23 +165,7 @@ void TestSeperateBy()
 }
 
 
-struct ComponentArray
-{
-    SizeArray* data;
-    uint32_t compid;
-};
-
-
-struct Entity
-{
-    /*
-    hash
-    name
-    parent
-    childlist
-    */
-};
-
+typedef uint32_t EntityID;
 
 std::hash<string> hasher;
 
@@ -190,51 +174,37 @@ inline uint32_t hash32(string str)
     return uint32_t(hasher(str));
 }
 
-struct TypeDesc
+struct Component_t
 {
-    uint32_t id;
-    uint16_t size;
+    uint32_t compSize:16;
+    uint32_t entityTableRow:16;
 };
 
-
-map<uint32_t, TypeDesc> compTable;
-map<uint32_t, uint8_t> HashidToEntityTableRow;
-
-union EntityHandle1
-{
-    union 
-    {
-        uint64_t id;
-        struct 
-        {
-            uint32_t randomValue;
-            uint32_t typehash;
-        };
-    };
-    union
-    {
-        uint64_t pos;
-        struct
-        {
-            uint32_t row;
-            uint32_t column;
-        };
-    };
-};
+map<uint32_t, Component_t> compsTable;
 
 
 union EntityHandle
 {
-    uint64_t id;
+    uint64_t value;
     struct
     {
-        uint8_t randomValue;
-        uint8_t row;
-        uint16_t column;
-        uint32_t typehash;
+        EntityID id;
+        uint32_t row : 12;
+        uint32_t column : 20;
     };
 };
+
+struct Entity
+{
+    EntityHandle parent;
+    EntityHandle leftMostChild;
+    EntityHandle sibling;
+    EntityID id;
+};
+
+
 static_assert(sizeof(EntityHandle) == 8, "EntityHandle should equal to 8");
+static_assert(sizeof(Entity) == 32, "Entity should equal to 8");
 
 
 uint32_t GetComponentID(string name)
@@ -245,77 +215,88 @@ uint32_t GetComponentID(string name)
 struct EntityList
 {
     uint32_t typehash;
-    ComponentArray* columns;
     uint8_t columnsCount = 0;
+    uint32_t* compids;
+    SizeArray** datas;
     uint32_t entityCount = 0;
-    EntityList(uint32_t _typehash, vector<string>& cL)
+    std::vector<EntityHandle> entitys;
+    EntityList(uint32_t _typehash, std::vector<string>& cL)
     {
         typehash = _typehash;
-        columnsCount = (uint8_t)cL.size() + 1;
-        columns = (ComponentArray*)malloc(columnsCount * sizeof(ComponentArray));
-        columns[0].data = new SizeArray(sizeof(EntityHandle), 8);
-        columns[0].compid = _typehash;
-        for(int i = 1; i < columnsCount; i++)
+        columnsCount = cL.size();
+        compids = (uint32_t*)malloc(columnsCount * sizeof(uint32_t*));
+        datas = (SizeArray**)malloc(columnsCount * sizeof(SizeArray**));
+        for(int i = 0; i < columnsCount; i++)
         {
-            TypeDesc& td = compTable[GetComponentID(cL[i - 1])];
-            columns[i].data = new SizeArray(td.size, 8);
-            columns[i].compid = td.id;
+            uint32_t hashid = GetComponentID(cL[i]);
+            uint16_t elemSize = compsTable[hashid].compSize;
+            compids[i] = hashid;
+            datas[i] = new SizeArray(elemSize, 8);
         }
     }
+
     const EntityList& operator= (const EntityList& other)
     {
         assert(0);
     }
+
     EntityList(EntityList& other) : typehash(other.typehash),
                     columnsCount(other.columnsCount), entityCount(other.columnsCount)
     {
-        this->columns = other.columns;
-        other.columns = NULL;
+        this->compids = other.compids;
+        this->datas = other.datas;
+        this->entitys = other.entitys;
+        other.compids = NULL;
+        other.datas = NULL;
     }
+
     EntityList(EntityList&& other) : typehash(other.typehash),
                     columnsCount(other.columnsCount), entityCount(other.columnsCount)
     {
-
-        this->columns = other.columns;
-        other.columns = NULL;
+        this->compids = other.compids;
+        this->datas = other.datas;
+        this->entitys = other.entitys;
+        other.compids = NULL;
+        other.datas = NULL;
     }
+    
     ~EntityList()
     {
-        if(columns != NULL)
+        if(compids != NULL) free(compids);
+        if(datas != NULL)
         {
             for(int i = 0; i < columnsCount; i++)
             {
-                if(columns[i].data != NULL)
+                if(datas[i] != NULL)
                 {
-                    delete(columns[i].data);
-                    columns[i].data = NULL;
+                    delete(datas[i]);
+                    datas[i] = NULL;
                 }
             }
-            free(columns);
-            columns = NULL;
+            free(datas);
+            datas = NULL;
         }
     }
 
-    void NewEntity(EntityHandle* handle)
+    void AddEntity(EntityHandle* handle)
     {
-        columns[0].compid = handle->typehash;
         //Todo(Wax): no space to store!
-        handle->column = columns[0].data->elemCount;
-        columns[0].data->PushElem(handle);
-        for(int i = 1; i < columnsCount; i++)
+        entitys.push_back(*handle);
+        handle->column = entityCount = entitys.size() - 1;
+
+        for(int i = 0; i < columnsCount; i++)
         {
-            columns[i].data->PushElem();
+            datas[i]->PushElem();
         }
-        entityCount++;
     }
 
     void* GetEntityComponet(int index, uint32_t compid)
     {
-        for(int i = 1; i < columnsCount; i++)
+        for(int i = 0; i < columnsCount; i++)
         {
-            if(compid == columns[i].compid)
+            if(compid == compids[i])
             {
-                return (*(columns[i].data))[index];
+                return (*(datas[i]))[index];
             }
         }
         assert(0);
@@ -325,71 +306,57 @@ struct EntityList
 
 vector<EntityList> EntityTable;
 
-
-void RegisterComponent(string name, uint16_t size)
+string joinString(vector<string>& str)
 {
-    uint32_t h = hash32(name);
-    compTable[h] = TypeDesc{h, size};
+    string s;
+    for(int i = 0; i < str.size(); i++)
+    {
+        s += str[i];
+    }
+    return s;
 }
 
-
-uint64_t RegisterEntity(string compList)
+void RegisterComponent(string name, uint16_t elemsize)
 {
     //Todo(Wax): add not register component will trigger an assertion.
-    uint32_t hashid = hash32(compList);
 
     // search table with componentList
-    vector<string> cL;
-    SeperateBy(compList, ',', cL);
-    EntityHandle eid;
+    uint32_t hashid = hash32(name);
 
     //SearchTable;
-    auto ret = HashidToEntityTableRow.find(hashid);
-    if(ret != HashidToEntityTableRow.end())
+    auto ret = compsTable.find(hashid);
+    if(ret == compsTable.end())
     {
-        //Found 
-        // if match return a new instance in that table
-        uint8_t row = ret->second;
-        EntityList& enL = EntityTable[row];
-        enL.NewEntity(&eid);
-        eid.row = row;
+        //Not found
+        compsTable[hashid] = {elemsize, 0};
+        // if not match create a new EntityList
+        std::vector<string> vname;
+        vname.push_back(name);
+        EntityTable.push_back(EntityList(hashid, vname));
+        compsTable[hashid].entityTableRow = EntityTable.size() - 1;
     }
+    //found?
+    //TODO(wax): Give out a warning?
+    
+    /*
     else
     {
-        // if not match create a new table with componentList
-        //Not found
-        EntityTable.push_back(EntityList(hashid, cL));
-        int lastElemIndex =  EntityTable.size() - 1;
-
-        uint8_t row = lastElemIndex;
-        HashidToEntityTableRow[hashid] = row;
-
-        eid.row = row;
-        eid.typehash = hashid;
-        eid.randomValue = dist(rd);
-        EntityTable[row].NewEntity(&eid);
-    }
-
-    return eid.id;
+        //Found 
+        uint32_t rowInTable = ret->second.entityTableRow;
+        return ;//
+        // if match return a new instance in that table
+        EntityList& enL = EntityTable[rowInTable];
+    }*/
 }
 
-void* GetCompPtr(uint64_t& entityid, uint32_t compid)
+
+void* GetCompPtr(EntityHandle& entityid, string type)
 {
-    EntityHandle eid;
-    eid.id = entityid;
-    assert(eid.id >= 0);
-    assert(eid.row >= 0);
-    assert(eid.column >= 0);
-    ComponentArray& compArr = EntityTable[eid.row].columns[0];
-    SizeArray& sa = *(compArr.data);
-    EntityHandle* el = sa.GetElem<EntityHandle>(eid.column);
-     
-    //find row
-    if(eid.row < EntityTable.size()  
-        && eid.column < EntityTable[eid.row].entityCount
-        && el->id == eid.id)
+    
+    EntityHandle& h = EntityTable[entityid.row].entitys[entityid.column];
+    if(h.id == entityid.id) 
     {
-        return EntityTable[eid.row].GetEntityComponet(eid.column, compid);
+        return EntityTable[entityid.row].GetEntityComponet(h.column, GetComponentID(type));
     }
     else
     {
@@ -557,29 +524,67 @@ public:
 
 */
 
+
+EntityHandle NewEntity(uint32_t row)
+{
+    EntityHandle h;
+    h.row = row;
+    h.id = dist(rd);
+    EntityTable[row].AddEntity(&h);
+    return h;
+}
+
+EntityHandle NewEntity(string types, int count = 1)
+{
+    vector<string> cL;
+    SeperateBy(types, ',', cL);
+    sort(cL.begin(), cL.end(), [](string& a, string& b)
+    {
+        return a[0] < b[0];
+    });
+    string sstr = joinString(cL);
+    uint32_t hashid = hash32(sstr);
+
+    uint32_t row;
+    //SearchTable;
+    auto ret = compsTable.find(hashid);
+    if(ret != compsTable.end())
+    {
+        //Found
+        row = ret->second.entityTableRow;
+    }
+    else
+    {
+        // Not found
+        // if not match create a new table with EntityList
+        EntityTable.push_back(EntityList(hashid, cL));
+        row =  EntityTable.size() - 1;
+        compsTable[hashid] = {0, row};
+    }
+
+    return NewEntity(row);
+}
+
+
 int main(int argc, char const *argv[])
 {
     RegisterComponent("Position", sizeof(Position));
     RegisterComponent("Velocity", sizeof(Velocity));
-    // RegisterSystem("Position, Velocity");
 
+    EntityHandle mye =  NewEntity("Position");
+    EntityHandle mye2 = NewEntity("Position");
+    EntityHandle mye3 = NewEntity("Velocity");
+    EntityHandle mye4 = NewEntity("Velocity");
+    EntityHandle mye5 = NewEntity("Position, Velocity");
 
-
-
-    uint64_t mye = RegisterEntity("Position");
-    uint64_t mye2 = RegisterEntity("Position");
-    uint64_t mye3 = RegisterEntity("Velocity");
-    uint64_t mye4 = RegisterEntity("Velocity");
-    uint64_t mye5 = RegisterEntity("Position, Velocity");
-
-    Position* p = (Position*)GetCompPtr(mye, GetComponentID("Position"));
-    Position* p2 = (Position*)GetCompPtr(mye2, GetComponentID("Position"));
+    Position* p = (Position*)GetCompPtr(mye,"Position");
+    Position* p2 = (Position*)GetCompPtr(mye2,"Position");
     
-    Velocity* p3 = (Velocity*)GetCompPtr(mye3, GetComponentID("Velocity"));
-    Velocity* p4 = (Velocity*)GetCompPtr(mye4, GetComponentID("Velocity"));
+    Velocity* p3 = (Velocity*)GetCompPtr(mye3,"Velocity");
+    Velocity* p4 = (Velocity*)GetCompPtr(mye4,"Velocity");
 
-    Position* p5p = (Position*)GetCompPtr(mye5, GetComponentID("Position"));
-    Velocity* p5v = (Velocity*)GetCompPtr(mye5, GetComponentID("Velocity"));
+    Position* p5p = (Position*)GetCompPtr(mye5,"Position");
+    Velocity* p5v = (Velocity*)GetCompPtr(mye5,"Velocity");
 
     p->x = 100;
     p->y = 100;
@@ -594,13 +599,13 @@ int main(int argc, char const *argv[])
     p5v->x = 1.21341f;
     p5v->y = 213.1233141f;
 
-    p = (Position*)GetCompPtr(mye2, GetComponentID("Position"));
-    p2 = (Position*)GetCompPtr(mye, GetComponentID("Position"));
+    p = (Position*)   GetCompPtr(mye2,   "Position");
+    p2 = (Position*)  GetCompPtr(mye,   "Position");
 
-    p3 = (Velocity*)GetCompPtr(mye4, GetComponentID("Velocity"));
-    p4 = (Velocity*)GetCompPtr(mye3, GetComponentID("Velocity"));
-    p5p = (Position*)GetCompPtr(mye5, GetComponentID("Position"));
-    p5v = (Velocity*)GetCompPtr(mye5, GetComponentID("Velocity"));
+    p3 = (Velocity*)  GetCompPtr(mye4,  "Velocity");
+    p4 = (Velocity*)  GetCompPtr(mye3,  "Velocity");
+    p5p = (Position*) GetCompPtr(mye5, "Position");
+    p5v = (Velocity*) GetCompPtr(mye5, "Velocity");
 
     cout << "p->x: " << p->x << " p->y: " << p->y << endl;
     cout << "p2->x: " << p2->x << " p2->y: " << p2->y << endl;
