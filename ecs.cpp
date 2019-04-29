@@ -9,7 +9,6 @@
 
 using namespace std;
 
-
 random_device rd;
 
 uniform_int_distribution<uint32_t> dist(0);
@@ -151,20 +150,6 @@ void SeperateBy(string str, char seperator, vector<string>& substrs)
     //Todo(Wax): remove all the empty str;
 }
 
-
-void TestSeperateBy()
-{
-    string a = "Position , Conves, adf, a ssd   , aadfasdf";
-    vector<string> v;
-    SeperateBy(a, ',', v);
-    for(auto s : v)
-    {
-        cout << '|' << s << "|\n";
-    }
-    cout << endl;
-}
-
-
 typedef uint32_t EntityID;
 
 std::hash<string> hasher;
@@ -219,7 +204,7 @@ struct EntityList
     uint32_t* compids;
     SizeArray** datas;
     uint32_t entityCount = 0;
-    std::vector<EntityHandle> entitys;
+    std::vector<Entity> entitys;
     EntityList(uint32_t _typehash, std::vector<string>& cL)
     {
         typehash = _typehash;
@@ -281,7 +266,15 @@ struct EntityList
     void AddEntity(EntityHandle* handle)
     {
         //Todo(Wax): no space to store!
-        entitys.push_back(*handle);
+        // *handle
+        Entity e;
+        EntityHandle h;
+        h.value = 0;
+        e.id = handle->id;
+        e.leftMostChild = h;
+        e.parent = h;
+        e.sibling = h;
+        entitys.push_back(e);
         handle->column = entityCount = entitys.size() - 1;
 
         for(int i = 0; i < columnsCount; i++)
@@ -337,26 +330,15 @@ void RegisterComponent(string name, uint16_t elemsize)
     }
     //found?
     //TODO(wax): Give out a warning?
-    
-    /*
-    else
-    {
-        //Found 
-        uint32_t rowInTable = ret->second.entityTableRow;
-        return ;//
-        // if match return a new instance in that table
-        EntityList& enL = EntityTable[rowInTable];
-    }*/
 }
-
 
 void* GetCompPtr(EntityHandle& entityid, string type)
 {
     
-    EntityHandle& h = EntityTable[entityid.row].entitys[entityid.column];
-    if(h.id == entityid.id) 
+    Entity e = EntityTable[entityid.row].entitys[entityid.column];
+    if(entityid.id == e.id)
     {
-        return EntityTable[entityid.row].GetEntityComponet(h.column, GetComponentID(type));
+        return EntityTable[entityid.row].GetEntityComponet(entityid.column, GetComponentID(type));
     }
     else
     {
@@ -565,17 +547,24 @@ EntityHandle NewEntity(string types, int count = 1)
     return NewEntity(row);
 }
 
+struct PV
+{
+    Position p;
+    Velocity v;
+};
 
 int main(int argc, char const *argv[])
 {
     RegisterComponent("Position", sizeof(Position));
     RegisterComponent("Velocity", sizeof(Velocity));
+    RegisterComponent("PV", sizeof(PV));
 
     EntityHandle mye =  NewEntity("Position");
     EntityHandle mye2 = NewEntity("Position");
     EntityHandle mye3 = NewEntity("Velocity");
     EntityHandle mye4 = NewEntity("Velocity");
     EntityHandle mye5 = NewEntity("Position, Velocity");
+    EntityHandle mye6 = NewEntity("PV");
 
     Position* p = (Position*)GetCompPtr(mye,"Position");
     Position* p2 = (Position*)GetCompPtr(mye2,"Position");
@@ -585,6 +574,7 @@ int main(int argc, char const *argv[])
 
     Position* p5p = (Position*)GetCompPtr(mye5,"Position");
     Velocity* p5v = (Velocity*)GetCompPtr(mye5,"Velocity");
+    PV*       p6pv = (PV*)GetCompPtr(mye6, "PV");
 
     p->x = 100;
     p->y = 100;
@@ -599,13 +589,18 @@ int main(int argc, char const *argv[])
     p5v->x = 1.21341f;
     p5v->y = 213.1233141f;
 
+    p6pv->p.x = 123321;
+    p6pv->p.y = 121212;
+    p6pv->v.x = 0.123123;
+    p6pv->v.y = 0.321312;
+
     p = (Position*)   GetCompPtr(mye2,   "Position");
     p2 = (Position*)  GetCompPtr(mye,   "Position");
-
     p3 = (Velocity*)  GetCompPtr(mye4,  "Velocity");
     p4 = (Velocity*)  GetCompPtr(mye3,  "Velocity");
     p5p = (Position*) GetCompPtr(mye5, "Position");
     p5v = (Velocity*) GetCompPtr(mye5, "Velocity");
+    p6pv = (PV*)GetCompPtr(mye6, "PV");
 
     cout << "p->x: " << p->x << " p->y: " << p->y << endl;
     cout << "p2->x: " << p2->x << " p2->y: " << p2->y << endl;
@@ -613,19 +608,12 @@ int main(int argc, char const *argv[])
     cout << "p4->x: " << p4->x << " p4->y: " << p4->y << endl;
     cout << "p5p->x: " << p5p->x << " p5p->y: " << p5p->y << endl;
     cout << "p5v->x: " << p5v->x << " p5v->y: " << p5v->y << endl;
+    cout << "p5v->x: " << p5v->x << " p5v->y: " << p5v->y << endl;  
 
-
+    cout << "p6pv->p.x: " << p6pv->p.x
+     << " p6pv->p.y: " << p6pv->p.y
+     << " p6pv->v.x: " << p6pv->v.x
+     << " p6pv->v.y: " << p6pv->v.y;
+    
     return 0;
 }
-
-//system 
-// match, rematch when entitytable row change.
-// 
-
-// class World
-// {
-// public:
-//     SystemMgr;
-//     ComponentMgr;
-//     EntityMgr;
-// }
