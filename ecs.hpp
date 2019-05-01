@@ -284,9 +284,6 @@ struct Row
 static_assert(sizeof(EntityHandle) == 8, "EntityHandle should equal to 8");
 static_assert(sizeof(Entity) == 32, "Entity should equal to 8");
 
-
-
-
 void RegisterComponent(string name, uint16_t elemsize);
 void* GetCompPtr(EntityHandle& entityid, string type);
 void SetCompValue(EntityHandle& entityid, string type, void* valuePtr);
@@ -295,7 +292,7 @@ void RemoveComponent(uint64_t eid, uint32_t compid);
 void DeleteEntity(uint64_t eid);
 EntityHandle NewEntity(uint32_t row, void* valuePtr = NULL);
 EntityHandle NewEntity(string types, void* valuePtr = NULL);
-Row& GetRow(string id);
+Row* GetRow(string id);
 string Trim(const string& s);
 void SeperateBy(string str, char seperator, vector<string>& substrs);
 
@@ -507,7 +504,7 @@ EntityHandle NewEntity(string types, void* valuePtr)
 }
 
 
-Row& GetRow(string id)
+Row* GetRow(string id)
 {
     vector<string> cL;
     SeperateBy(id, ',', cL);
@@ -526,7 +523,7 @@ Row& GetRow(string id)
     auto ret = hashidTorowIndex.find(hashid);
     if(ret != hashidTorowIndex.end())
     {
-        return ret->second;
+        return &ret->second;
     }
     else
     {
@@ -561,7 +558,7 @@ Row& GetRow(string id)
                 r.eachrow[i].typehash[j] = EntityTable[row[i]].compids[j];
             }
         }
-        return r;
+        return &r;
     }
 }
 #endif
