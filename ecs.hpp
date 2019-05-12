@@ -1,5 +1,20 @@
 #pragma once
 
+/*
+Todo(Wax):
+    1. Double loop variable i and j is easy to make mistake!!
+    2. Seperate basic component and compound componet
+    3. Getting element ptrs from Row with hard coded 1, 2, 3  are not portable.
+    
+    4. Replace stl containers with other containers.
+    5. Dynamic memory management for SizeArray.
+    6. Finish all the apis
+    7. Error handle.
+    8. Add tests
+
+*/
+
+
 #include <iostream>
 #include <map>
 #include <vector>
@@ -13,7 +28,6 @@ using namespace std;
 
 inline uint32_t hash32(string str);
 uint32_t GetComponentID(string name);
-
 
 class SizeArray
 {
@@ -67,6 +81,7 @@ public:
         elemCount++;
         return (void*)(&data[cur]);
     }
+
     void SetValue(int elemindex, void* val)
     {
         int cur = GetCursor(elemindex);
@@ -88,12 +103,14 @@ public:
         assert(cur < arrSize * elemSize);
         return (T*)(&data[cur]);
     }
+
     void* operator[](int index)
     {
         int cur = GetCursor(index);
         assert(cur < arrSize * elemSize);
         return &data[cur];
     }
+
     void DelElem(int index)
     {
         int cur = GetCursor(index);
@@ -289,10 +306,18 @@ void* GetCompPtr(EntityHandle& entityid, string type);
 void SetCompValue(EntityHandle& entityid, string type, void* valuePtr);
 void AddComponent(uint64_t eid, uint32_t compid);
 void RemoveComponent(uint64_t eid, uint32_t compid);
+bool HasComponet(EntityHandle& entityid, uint32_t compid);
 void DeleteEntity(uint64_t eid);
 EntityHandle NewEntity(uint32_t row, void* valuePtr = NULL);
-EntityHandle NewEntity(string types, void* valuePtr = NULL);
+EntityHandle NewEntity(string types, uint32_t id = 0, void* valuePtr = NULL);
+void DelEntity(EntityHandle& entityid);
+void RemoveChildren(EntityHandle& entityid);
+void AddChild(EntityHandle& parent, EntityHandle& child);
+void SetParent(EntityHandle& child, EntityHandle& parent);
+
 Row* GetRow(string id);
+Row* GetRowOnlyContains(string id);
+Row* GetRowContains(string id);
 string Trim(const string& s);
 void SeperateBy(string str, char seperator, vector<string>& substrs);
 
@@ -461,6 +486,7 @@ void DeleteEntity(uint64_t eid)
 }
 
 
+
 EntityHandle NewEntity(uint32_t row, void* valuePtr)
 {
     EntityHandle h;
@@ -470,7 +496,7 @@ EntityHandle NewEntity(uint32_t row, void* valuePtr)
     return h;
 }
 
-EntityHandle NewEntity(string types, void* valuePtr)
+EntityHandle NewEntity(string types, uint32_t /*id*/, void* valuePtr)
 {
     vector<string> cL;
     SeperateBy(types, ',', cL);

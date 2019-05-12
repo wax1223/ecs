@@ -54,7 +54,7 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& rows = GetRow("Position");
+        Row& rows = *(GetRow("Position"));
         Position* p = (Position*)rows[0].comps[0];
         assert(p[0].x == 100 && p[0].y == 100);
         assert(p[1].x == 200 && p[1].y == 300);
@@ -68,7 +68,7 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& rows = GetRow("Velocity");
+        Row& rows = *GetRow("Velocity");
         Velocity* p = (Velocity*)rows[0].comps[0];
         assert((p[0].x - 1.23f) <= 0.000001 && (p[0].y - 2.123f) <= 0.000001);
         assert((p[1].x - 123.123f) <= 0.000001 && (p[1].y - 13.123f) <= 0.000001);
@@ -81,7 +81,7 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& rows = GetRow("Velocity ,  Position");
+        Row& rows = *GetRow("Velocity ,  Position");
         Position* p = (Position*)rows[0].comps[0];
         Velocity* v = (Velocity*)rows[0].comps[1];
         assert(p[0].x == 5594 && p[0].y == 1314);
@@ -95,7 +95,7 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& rows = GetRow("Deridee");
+        Row& rows = *GetRow("Deridee");
         Deridee* d = (Deridee*) rows[0].comps[0];
         assert(d[0].a == 123);
         assert(d[0].b == 0.123f);
@@ -109,7 +109,7 @@ public:
     void PrintData()
     {
         //OnlyOnce and use forever!
-        Row& rows = GetRow("Deridee, Position, Velocity");
+        Row& rows = *GetRow("Deridee, Position, Velocity");
         cout <<"\n";
         for(int i = 0; i < rows.count; i++)
         {
